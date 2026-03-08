@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShaderGradient Playground</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #000; width: 100vw; height: 100vh; overflow: hidden; font-family: 'DM Mono', monospace; color: #fff; }
+
+#canvas-container { position: fixed; inset: 0; z-index: 0; }
+#canvas-container canvas { display: block; width: 100% !important; height: 100% !important; }
+
+#glass-overlay {
+  position: fixed; top: 0; left: 0; right: 300px; bottom: 0;
+  z-index: 3; pointer-events: none; display: none;
+}
+#grain-canvas { position: fixed; inset: 0; z-index: 4; pointer-events: none; opacity: 0; mix-blend-mode: overlay; }
+
+#panel {
+  position: fixed; top: 0; right: 0; width: 300px; height: 100vh; z-index: 10;
+  background: rgba(6,6,8,0.78); backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  border-left: 1px solid rgba(255,255,255,0.06);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+.panel-header { padding: 18px 20px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); flex-shrink: 0; }
+.panel-title { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; letter-spacing: 0.08em; color: rgba(255,255,255,0.9); margin-bottom: 2px; }
+.panel-sub { font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(255,255,255,0.25); }
+
+.tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.05); flex-shrink: 0; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { flex-shrink: 0; padding: 9px 10px; font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.25); cursor: pointer; border: none; background: transparent; transition: color 0.15s; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tab.active { color: rgba(255,255,255,0.85); border-bottom-color: rgba(255,255,255,0.4); }
+
+.panel-body { flex: 1; overflow-y: auto; padding: 14px 16px 20px; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.1) transparent; }
+.panel-body::-webkit-scrollbar { width: 3px; }
+.panel-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+.section { margin-bottom: 18px; }
+.section-label { font-size: 8px; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(255,255,255,0.25); margin-bottom: 10px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+.ctrl { margin-bottom: 10px; }
+.ctrl-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+.ctrl-name { font-size: 9.5px; color: rgba(255,255,255,0.45); letter-spacing: 0.04em; }
+.ctrl-val { font-size: 10px; color: rgba(255,255,255,0.75); min-width: 36px; text-align: right; }
+
+input[type="range"] { -webkit-appearance: none; width: 100%; height: 2px; background: rgba(255,255,255,0.1); border-radius: 1px; outline: none; cursor: pointer; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,0.9); box-shadow: 0 0 0 2px rgba(255,255,255,0.15), 0 2px 8px rgba(0,0,0,0.5); cursor: pointer; transition: transform 0.12s; }
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.4); }
+
+.color-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.color-item { flex: 1; display: flex; flex-direction: column; gap: 5px; align-items: center; }
+.color-item label { font-size: 8px; letter-spacing: 0.1em; color: rgba(255,255,255,0.3); text-transform: uppercase; }
+.color-wrap { width: 100%; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); overflow: hidden; position: relative; cursor: pointer; transition: border-color 0.15s; }
+.color-wrap:hover { border-color: rgba(255,255,255,0.3); }
+.color-wrap input[type="color"] { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); border: none; cursor: pointer; opacity: 0; }
+.color-swatch { position: absolute; inset: 0; pointer-events: none; border-radius: 7px; }
+
+.opt-row { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
+.opt-btn { padding: 4px 9px; font-family: 'DM Mono', monospace; font-size: 8px; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(255,255,255,0.35); background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 5px; cursor: pointer; transition: all 0.12s; }
+.opt-btn:hover { border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.6); }
+.opt-btn.active { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.3); color: rgba(255,255,255,0.9); }
+
+.toggle-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.toggle-name { font-size: 9.5px; color: rgba(255,255,255,0.4); }
+.toggle { width: 34px; height: 18px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); border-radius: 9px; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
+.toggle.on { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.3); }
+.toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; background: rgba(255,255,255,0.9); border-radius: 50%; transition: transform 0.18s; }
+.toggle.on::after { transform: translateX(16px); }
+
+/* BG presets */
+.bg-presets { display: flex; gap: 5px; margin-bottom: 10px; flex-wrap: wrap; }
+.bg-preset { width: 26px; height: 26px; border-radius: 6px; cursor: pointer; border: 2px solid transparent; transition: border-color 0.15s; flex-shrink: 0; }
+.bg-preset:hover, .bg-preset.active { border-color: rgba(255,255,255,0.55); }
+
+/* Glass preview */
+.glass-preview { width: 100%; height: 44px; border-radius: 10px; margin-bottom: 12px; position: relative; overflow: hidden; background: linear-gradient(135deg, #b31c2a55, #2a1a4e55, #1a6e5c55); border: 1px solid rgba(255,255,255,0.08); }
+.glass-preview-layer { position: absolute; inset: 0; }
+.glass-preview-text { position: relative; z-index: 1; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(255,255,255,0.5); display: flex; align-items: center; justify-content: center; height: 100%; }
+
+/* Export */
+.export-btn { width: 100%; padding: 11px; border-radius: 9px; border: none; cursor: pointer; font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 500; transition: all 0.15s; margin-bottom: 8px; }
+.export-btn-gif { background: rgba(180,120,255,0.12); color: rgba(200,160,255,0.9); border: 1px solid rgba(180,120,255,0.22); }
+.export-btn-gif:hover:not(:disabled) { background: rgba(180,120,255,0.22); border-color: rgba(180,120,255,0.4); }
+.export-btn-vid { background: rgba(60,180,255,0.1); color: rgba(120,200,255,0.9); border: 1px solid rgba(60,180,255,0.2); }
+.export-btn-vid:hover:not(:disabled) { background: rgba(60,180,255,0.2); border-color: rgba(60,180,255,0.38); }
+.export-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.progress-wrap { margin-bottom: 8px; display: none; }
+.progress-label { font-size: 8px; color: rgba(255,255,255,0.35); margin-bottom: 4px; letter-spacing: 0.1em; }
+.progress-bar-bg { width: 100%; height: 3px; background: rgba(255,255,255,0.07); border-radius: 2px; overflow: hidden; }
+.pgif .progress-bar-fill { background: rgba(180,120,255,0.8); height: 100%; border-radius: 2px; transition: width 0.1s; width: 0%; }
+.pvid .progress-bar-fill { background: rgba(60,180,255,0.8); height: 100%; border-radius: 2px; transition: width 0.1s; width: 0%; }
+
+.export-status { font-size: 8px; color: rgba(255,255,255,0.3); letter-spacing: 0.1em; margin-bottom: 6px; min-height: 14px; }
+.size-est { font-size: 8px; color: rgba(255,255,255,0.22); margin: 4px 0 10px; letter-spacing: 0.06em; }
+.size-warn { color: rgba(255,180,80,0.75); }
+
+#code-out { background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px; font-size: 8.5px; line-height: 1.7; color: rgba(255,255,255,0.35); cursor: pointer; transition: border-color 0.2s, color 0.2s; white-space: pre; overflow-x: auto; margin-top: 4px; }
+#code-out:hover { border-color: rgba(255,255,255,0.15); color: rgba(255,255,255,0.55); }
+#code-out.copied { border-color: rgba(100,220,150,0.5); color: rgba(100,220,150,0.8); }
+.copy-label { font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.18); margin-bottom: 6px; }
+
+.info-bar { padding: 7px 16px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 8px; letter-spacing: 0.1em; color: rgba(255,255,255,0.18); display: flex; justify-content: space-between; flex-shrink: 0; }
+
+/* ── Presets ── */
+.preset-save-row { display: flex; gap: 6px; margin-bottom: 14px; }
+.preset-name-input {
+  flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 7px; padding: 7px 10px; font-family: 'DM Mono', monospace;
+  font-size: 10px; color: rgba(255,255,255,0.8); outline: none; transition: border-color 0.15s;
+}
+.preset-name-input::placeholder { color: rgba(255,255,255,0.2); }
+.preset-name-input:focus { border-color: rgba(255,255,255,0.28); }
+.preset-save-btn {
+  padding: 7px 12px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 7px; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.65); cursor: pointer; transition: all 0.12s; white-space: nowrap;
+}
+.preset-save-btn:hover { background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.9); border-color: rgba(255,255,255,0.28); }
+
+.preset-list { display: flex; flex-direction: column; gap: 5px; }
+.preset-item {
+  display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 8px; cursor: pointer; transition: all 0.12s; position: relative;
+}
+.preset-item:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); }
+.preset-item-colors { display: flex; gap: 3px; flex-shrink: 0; }
+.preset-item-dot { width: 8px; height: 8px; border-radius: 50%; }
+.preset-item-name { flex: 1; font-size: 10px; color: rgba(255,255,255,0.7); letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preset-item-date { font-size: 8px; color: rgba(255,255,255,0.2); flex-shrink: 0; }
+.preset-item-del {
+  width: 18px; height: 18px; border-radius: 4px; border: none; background: rgba(255,80,80,0.12);
+  color: rgba(255,100,100,0.6); font-size: 11px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.12s;
+  line-height: 1;
+}
+.preset-item-del:hover { background: rgba(255,80,80,0.28); color: rgba(255,120,120,0.9); }
+.preset-empty { font-size: 9px; color: rgba(255,255,255,0.18); letter-spacing: 0.1em; text-align: center; padding: 18px 0; border: 1px dashed rgba(255,255,255,0.07); border-radius: 8px; }
+
+/* Builtin presets */
+.preset-builtin { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.preset-builtin .preset-item { border-left: 2px solid rgba(180,120,255,0.3); }
+
+/* Camera reset btn */
+.cam-reset-btn {
+  width: 100%; padding: 9px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05); font-family: 'DM Mono', monospace;
+  font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+  color: rgba(255,255,255,0.45); cursor: pointer; transition: all 0.15s; margin-bottom: 14px;
+}
+.cam-reset-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); border-color: rgba(255,255,255,0.22); }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+<canvas id="grain-canvas"></canvas>
+<div id="glass-overlay"></div>
+
+<div id="panel">
+  <div class="panel-header">
+    <div class="panel-title">ShaderGradient</div>
+    <div class="panel-sub">Three.js · GLSL · Live Preview</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="colors">Colors</button>
+    <button class="tab" data-tab="shape">Shape</button>
+    <button class="tab" data-tab="camera">Camera</button>
+    <button class="tab" data-tab="anim">Anim</button>
+    <button class="tab" data-tab="glass">Glass</button>
+    <button class="tab" data-tab="presets">Presets</button>
+    <button class="tab" data-tab="export">Export</button>
+    <button class="tab" data-tab="code">Code</button>
+  </div>
+
+  <div class="panel-body">
+
+    <!-- COLORS -->
+    <div class="tab-panel active" id="tab-colors">
+      <div class="section">
+        <div class="section-label">Gradient Colors</div>
+        <div class="color-row">
+          <div class="color-item"><label>C1</label><div class="color-wrap" id="cw1"><div class="color-swatch" id="cs1" style="background:#ffffff"></div><input type="color" id="color1" value="#ffffff"></div></div>
+          <div class="color-item"><label>C2</label><div class="color-wrap" id="cw2"><div class="color-swatch" id="cs2" style="background:#ffbb00"></div><input type="color" id="color2" value="#ffbb00"></div></div>
+          <div class="color-item"><label>C3</label><div class="color-wrap" id="cw3"><div class="color-swatch" id="cs3" style="background:#0700ff"></div><input type="color" id="color3" value="#0700ff"></div></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Scene Background</div>
+        <div class="bg-presets" id="bg-presets">
+          <div class="bg-preset active" data-color="#000000" style="background:#000000" title="Black"></div>
+          <div class="bg-preset" data-color="#ffffff" style="background:#ffffff" title="White"></div>
+          <div class="bg-preset" data-color="#0d1117" style="background:#0d1117" title="GH Dark"></div>
+          <div class="bg-preset" data-color="#334C65" style="background:#334C65" title="Navy"></div>
+          <div class="bg-preset" data-color="#1a0a2e" style="background:#1a0a2e" title="Deep Purple"></div>
+          <div class="bg-preset" data-color="#0f1f1a" style="background:#0f1f1a" title="Dark Teal"></div>
+          <div class="bg-preset" data-color="#1a1209" style="background:#1a1209" title="Dark Amber"></div>
+          <div class="bg-preset" data-color="#f5f0e8" style="background:#f5f0e8" title="Cream"></div>
+        </div>
+        <div class="color-row">
+          <div class="color-item"><label>Custom</label>
+            <div class="color-wrap" id="cw-bg"><div class="color-swatch" id="cs-bg" style="background:#000000"></div><input type="color" id="color-bg" value="#000000"></div>
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Surface</div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">brightness</span><span class="ctrl-val" id="v-brightness">1.10</span></div><input type="range" id="brightness" min="0.1" max="3" step="0.05" value="1.1"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">reflection</span><span class="ctrl-val" id="v-reflection">0.10</span></div><input type="range" id="reflection" min="0" max="1" step="0.01" value="0.1"></div>
+      </div>
+      <div class="section">
+        <div class="section-label">Light Type</div>
+        <div class="opt-row" id="lightType"><button class="opt-btn active" data-val="3d">3d</button><button class="opt-btn" data-val="env">env</button></div>
+        <div class="section-label" style="margin-top:8px">Env Preset</div>
+        <div class="opt-row" id="envPreset"><button class="opt-btn active" data-val="city">city</button><button class="opt-btn" data-val="dawn">dawn</button><button class="opt-btn" data-val="night">night</button></div>
+      </div>
+    </div>
+
+    <!-- SHAPE -->
+    <div class="tab-panel" id="tab-shape">
+      <div class="section">
+        <div class="section-label">Geometry</div>
+        <div class="opt-row" id="type"><button class="opt-btn active" data-val="sphere">sphere</button><button class="opt-btn" data-val="plane">plane</button><button class="opt-btn" data-val="waterPlane">waterPlane</button></div>
+      </div>
+      <div class="section">
+        <div class="section-label">Noise</div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">uAmplitude</span><span class="ctrl-val" id="v-uAmplitude">1.40</span></div><input type="range" id="uAmplitude" min="0" max="5" step="0.05" value="1.4"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">uDensity</span><span class="ctrl-val" id="v-uDensity">1.10</span></div><input type="range" id="uDensity" min="0.1" max="5" step="0.05" value="1.1"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">uFrequency</span><span class="ctrl-val" id="v-uFrequency">5.5</span></div><input type="range" id="uFrequency" min="0" max="20" step="0.1" value="5.5"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">uStrength</span><span class="ctrl-val" id="v-uStrength">1.00</span></div><input type="range" id="uStrength" min="0" max="3" step="0.05" value="1.0"></div>
+      </div>
+      <div class="section">
+        <div class="section-label">Rotation</div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">rotationX</span><span class="ctrl-val" id="v-rotationX">0°</span></div><input type="range" id="rotationX" min="-180" max="180" step="1" value="0"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">rotationY</span><span class="ctrl-val" id="v-rotationY">0°</span></div><input type="range" id="rotationY" min="-180" max="180" step="1" value="0"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">rotationZ</span><span class="ctrl-val" id="v-rotationZ">0°</span></div><input type="range" id="rotationZ" min="-180" max="180" step="1" value="0"></div>
+      </div>
+      <div class="section">
+        <div class="section-label">Display</div>
+        <div class="toggle-row"><span class="toggle-name">wireframe</span><div class="toggle" id="toggle-wireframe"></div></div>
+        <div class="toggle-row"><span class="toggle-name">grain</span><div class="toggle" id="toggle-grain"></div></div>
+        <div class="toggle-row"><span class="toggle-name">axesHelper</span><div class="toggle" id="toggle-axes"></div></div>
+      </div>
+    </div>
+
+    <!-- CAMERA -->
+    <div class="tab-panel" id="tab-camera">
+      <button class="cam-reset-btn" id="btn-cam-reset">↺ Reset Camera to Default</button>
+      <div class="section">
+        <div class="section-label">Spherical Position</div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">cDistance</span><span class="ctrl-val" id="v-cDistance">7.1</span></div><input type="range" id="cDistance" min="1" max="30" step="0.1" value="7.1"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">cAzimuthAngle</span><span class="ctrl-val" id="v-cAzimuthAngle">0°</span></div><input type="range" id="cAzimuthAngle" min="0" max="360" step="1" value="0"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">cPolarAngle</span><span class="ctrl-val" id="v-cPolarAngle">140°</span></div><input type="range" id="cPolarAngle" min="0" max="180" step="1" value="140"></div>
+      </div>
+      <div class="section">
+        <div class="section-label">Lens</div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">cameraZoom</span><span class="ctrl-val" id="v-cameraZoom">17.3</span></div><input type="range" id="cameraZoom" min="1" max="50" step="0.1" value="17.3"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">fov</span><span class="ctrl-val" id="v-fov">45°</span></div><input type="range" id="fov" min="10" max="120" step="1" value="45"></div>
+      </div>
+    </div>
+
+    <!-- PRESETS -->
+    <div class="tab-panel" id="tab-presets">
+      <div class="section">
+        <div class="section-label">Save Current State</div>
+        <div class="preset-save-row">
+          <input type="text" class="preset-name-input" id="preset-name-input" placeholder="Name this preset…" maxlength="40">
+          <button class="preset-save-btn" id="btn-save-preset">Save</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Built-in Presets</div>
+        <div class="preset-builtin" id="preset-builtin-list"></div>
+      </div>
+      <div class="section">
+        <div class="section-label">My Presets</div>
+        <div class="preset-list" id="preset-user-list"></div>
+      </div>
+    </div>
+
+    <!-- ANIM -->
+    <div class="tab-panel" id="tab-anim">
+      <div class="section">
+        <div class="section-label">Playback</div>
+        <div class="toggle-row"><span class="toggle-name">animate</span><div class="toggle on" id="toggle-animate"></div></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">uSpeed</span><span class="ctrl-val" id="v-uSpeed">0.10</span></div><input type="range" id="uSpeed" min="0" max="2" step="0.01" value="0.1"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">loopDuration (s)</span><span class="ctrl-val" id="v-loopDuration">10s</span></div><input type="range" id="loopDuration" min="2" max="60" step="1" value="10"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">pixelDensity</span><span class="ctrl-val" id="v-pixelDensity">1x</span></div><input type="range" id="pixelDensity" min="0.5" max="3" step="0.5" value="1"></div>
+      </div>
+      <div class="section">
+        <div class="section-label">uTime Scrub</div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">uTime</span><span class="ctrl-val" id="v-uTime">0.00</span></div><input type="range" id="uTime" min="0" max="100" step="0.1" value="0"></div>
+      </div>
+    </div>
+
+    <!-- GLASS -->
+    <div class="tab-panel" id="tab-glass">
+      <div class="section">
+        <div class="section-label">Frosted Glass Overlay</div>
+        <div class="toggle-row"><span class="toggle-name">show overlay (canvas only)</span><div class="toggle" id="toggle-glass"></div></div>
+        <div class="glass-preview">
+          <div class="glass-preview-layer" id="glass-preview-layer"></div>
+          <div class="glass-preview-text">preview</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Blur</div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">blur intensity</span><span class="ctrl-val" id="v-gBlur">16px</span></div><input type="range" id="gBlur" min="0" max="80" step="1" value="16"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">saturation</span><span class="ctrl-val" id="v-gSat">1.20</span></div><input type="range" id="gSat" min="0.5" max="3" step="0.05" value="1.2"></div>
+      </div>
+      <div class="section">
+        <div class="section-label">Tint</div>
+        <div class="color-row">
+          <div class="color-item"><label>Tint Color</label>
+            <div class="color-wrap" id="cw-glass"><div class="color-swatch" id="cs-glass" style="background:#ffffff"></div><input type="color" id="color-glass" value="#ffffff"></div>
+          </div>
+        </div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">fill opacity</span><span class="ctrl-val" id="v-gOpacity">12%</span></div><input type="range" id="gOpacity" min="0" max="90" step="1" value="12"></div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">border opacity</span><span class="ctrl-val" id="v-gBorder">15%</span></div><input type="range" id="gBorder" min="0" max="80" step="1" value="15"></div>
+      </div>
+      <div class="section">
+        <div class="section-label">Presets</div>
+        <div class="opt-row" id="glass-presets">
+          <button class="opt-btn" data-preset="frosted-light">Frosted Light</button>
+          <button class="opt-btn" data-preset="frosted-dark">Frosted Dark</button>
+          <button class="opt-btn" data-preset="heavy">Heavy</button>
+          <button class="opt-btn" data-preset="subtle">Subtle</button>
+          <button class="opt-btn" data-preset="tinted">Tinted</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- EXPORT -->
+    <div class="tab-panel" id="tab-export">
+      <div class="section">
+        <div class="section-label">GIF Export</div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">Resolution</span></div>
+          <div class="opt-row" id="gif-res">
+            <button class="opt-btn" data-val="480">480p</button>
+            <button class="opt-btn active" data-val="720">720p</button>
+            <button class="opt-btn" data-val="1080">1080p</button>
+            <button class="opt-btn" data-val="4k">4K ⚠</button>
+          </div>
+        </div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">Frame Rate</span></div>
+          <div class="opt-row" id="gif-fps">
+            <button class="opt-btn active" data-val="10">10 fps</button>
+            <button class="opt-btn" data-val="15">15 fps</button>
+            <button class="opt-btn" data-val="24">24 fps</button>
+          </div>
+        </div>
+        <div class="size-est" id="gif-size-est">Est. size loading…</div>
+        <div class="progress-wrap pgif" id="gif-progress">
+          <div class="progress-label" id="gif-progress-label">Encoding…</div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="gif-bar"></div></div>
+        </div>
+        <div class="export-status" id="gif-status"></div>
+        <button class="export-btn export-btn-gif" id="btn-gif">↓ Export GIF Loop</button>
+      </div>
+      <div class="section">
+        <div class="section-label">Video Export</div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">Format</span></div>
+          <div class="opt-row" id="vid-fmt">
+            <button class="opt-btn active" data-val="webm">WebM (VP9)</button>
+            <button class="opt-btn" data-val="mp4" id="btn-fmt-mp4">MP4 (H.264)</button>
+          </div>
+        </div>
+        <div id="mp4-note" style="display:none;font-size:8px;color:rgba(255,180,80,0.7);margin-bottom:8px;line-height:1.5">⚠ MP4 requires Chrome 94+ with WebCodecs API</div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">Resolution</span></div>
+          <div class="opt-row" id="vid-res">
+            <button class="opt-btn" data-val="720">720p</button>
+            <button class="opt-btn active" data-val="1080">1080p</button>
+            <button class="opt-btn" data-val="2k">2K</button>
+            <button class="opt-btn" data-val="4k">4K</button>
+          </div>
+        </div>
+        <div class="ctrl"><div class="ctrl-head"><span class="ctrl-name">Frame Rate</span></div>
+          <div class="opt-row" id="vid-fps">
+            <button class="opt-btn" data-val="24">24 fps</button>
+            <button class="opt-btn active" data-val="30">30 fps</button>
+            <button class="opt-btn" data-val="60">60 fps</button>
+          </div>
+        </div>
+        <div class="size-est" id="vid-size-est">Est. size loading…</div>
+        <div class="progress-wrap pvid" id="vid-progress">
+          <div class="progress-label" id="vid-progress-label">Recording…</div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="vid-bar"></div></div>
+        </div>
+        <div class="export-status" id="vid-status"></div>
+        <button class="export-btn export-btn-vid" id="btn-vid">↓ Export Video Loop</button>
+      </div>
+      <div style="font-size:8px;color:rgba(255,255,255,0.18);line-height:1.7;margin-top:4px;letter-spacing:0.04em">
+        Duration set in Anim tab. For cleanest loop start, set uTime=0. Lower uSpeed → smoother seam.
+      </div>
+    </div>
+
+    <!-- CODE -->
+    <div class="tab-panel" id="tab-code">
+      <div class="section">
+        <div class="copy-label">↑ click to copy JSX</div>
+        <div id="code-out"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="info-bar">
+    <span>drag canvas to orbit</span>
+    <span id="fps-counter">— fps</span>
+  </div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+const S = {
+  color1: '#ffffff', color2: '#ffbb00', color3: '#0700ff',
+  bgColor: '#000000',
+  brightness: 1.1, reflection: 0.1,
+  lightType: '3d', envPreset: 'city',
+  type: 'sphere',
+  uAmplitude: 1.4, uDensity: 1.1, uFrequency: 5.5, uStrength: 1.0,
+  rotationX: 0, rotationY: 0, rotationZ: 0,
+  wireframe: false, grain: false, axes: false,
+  cDistance: 7.1, cAzimuthAngle: 0, cPolarAngle: 140,
+  cameraZoom: 17.3, fov: 45,
+  animate: true, uSpeed: 0.1, loopDuration: 10, pixelDensity: 1,
+  uTime: 0,
+  glassOn: false, gBlur: 16, gSat: 1.2, gTint: '#ffffff', gOpacity: 12, gBorder: 15,
+  gifRes: '720', gifFps: 10,
+  vidRes: '1080', vidFps: 30, vidFmt: 'webm',
+};
+
+// ── THREE SETUP ──
+const container = document.getElementById('canvas-container');
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(S.pixelDensity);
+renderer.setSize(container.clientWidth, container.clientHeight);
+renderer.setClearColor(new THREE.Color(S.bgColor));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(S.fov, container.clientWidth / container.clientHeight, 0.1, 1000);
+updateCamera();
+
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.05;
+
+const axesHelper = new THREE.AxesHelper(3);
+axesHelper.visible = false;
+scene.add(axesHelper);
+
+// ── SHADERS ──
+const NOISE_GLSL = `
+vec3 mod289v3(vec3 x){return x-floor(x*(1./289.))*289.;}
+vec4 mod289v4(vec4 x){return x-floor(x*(1./289.))*289.;}
+vec4 permute(vec4 x){return mod289v4(((x*34.)+1.)*x);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+float snoise(vec3 v){
+  const vec2 C=vec2(1./6.,1./3.);const vec4 D=vec4(0.,.5,1.,2.);
+  vec3 i=floor(v+dot(v,C.yyy));vec3 x0=v-i+dot(i,C.xxx);
+  vec3 g=step(x0.yzx,x0.xyz);vec3 l=1.-g;
+  vec3 i1=min(g.xyz,l.zxy);vec3 i2=max(g.xyz,l.zxy);
+  vec3 x1=x0-i1+C.xxx;vec3 x2=x0-i2+C.yyy;vec3 x3=x0-D.yyy;
+  i=mod289v3(i);
+  vec4 p=permute(permute(permute(i.z+vec4(0.,i1.z,i2.z,1.))+i.y+vec4(0.,i1.y,i2.y,1.))+i.x+vec4(0.,i1.x,i2.x,1.));
+  float n_=.142857142857;vec3 ns=n_*D.wyz-D.xzx;
+  vec4 j=p-49.*floor(p*ns.z*ns.z);vec4 x_=floor(j*ns.z);vec4 y_=floor(j-7.*x_);
+  vec4 x=x_*ns.x+ns.yyyy;vec4 y=y_*ns.x+ns.yyyy;vec4 h=1.-abs(x)-abs(y);
+  vec4 b0=vec4(x.xy,y.xy);vec4 b1=vec4(x.zw,y.zw);
+  vec4 s0=floor(b0)*2.+1.;vec4 s1=floor(b1)*2.+1.;vec4 sh=-step(h,vec4(0.));
+  vec4 a0=b0.xzyw+s0.xzyw*sh.xxyy;vec4 a1=b1.xzyw+s1.xzyw*sh.zzww;
+  vec3 p0=vec3(a0.xy,h.x);vec3 p1=vec3(a0.zw,h.y);vec3 p2=vec3(a1.xy,h.z);vec3 p3=vec3(a1.zw,h.w);
+  vec4 norm=taylorInvSqrt(vec4(dot(p0,p0),dot(p1,p1),dot(p2,p2),dot(p3,p3)));
+  p0*=norm.x;p1*=norm.y;p2*=norm.z;p3*=norm.w;
+  vec4 m=max(.6-vec4(dot(x0,x0),dot(x1,x1),dot(x2,x2),dot(x3,x3)),0.);m=m*m;
+  return 42.*dot(m*m,vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
+}`;
+
+const vertexShader = `${NOISE_GLSL}
+uniform float uTime;uniform float uSpeed;uniform float uFrequency;uniform float uAmplitude;uniform float uDensity;uniform float uStrength;
+varying float vNoise;varying vec3 vNormal;varying vec3 vViewPos;
+void main(){
+  float t=uTime*uSpeed*uFrequency*0.5;vec3 ni=position*uDensity;
+  float n=snoise(ni+vec3(t,t*0.7,t*0.3));float n2=snoise(ni*1.6+vec3(-t*0.5,t*0.9,t*0.4))*0.5;
+  vec3 displaced=position+normal*(n+n2)*uAmplitude*uStrength;
+  vNoise=n*0.5+0.5;vNormal=normalize(normalMatrix*normal);
+  vec4 mvPos=modelViewMatrix*vec4(displaced,1.0);vViewPos=-mvPos.xyz;
+  gl_Position=projectionMatrix*mvPos;
+}`;
+
+const fragmentShader = `
+uniform vec3 uColor1;uniform vec3 uColor2;uniform vec3 uColor3;uniform float uBrightness;uniform float uReflection;uniform int uLightType;uniform vec3 uEnvColor;
+varying float vNoise;varying vec3 vNormal;varying vec3 vViewPos;
+void main(){
+  float n=vNoise;
+  vec3 col=mix(uColor1,uColor2,smoothstep(0.0,0.55,n));col=mix(col,uColor3,smoothstep(0.45,1.0,n));
+  vec3 norm=normalize(vNormal);vec3 viewDir=normalize(vViewPos);vec3 light=vec3(0.0);
+  if(uLightType==0){
+    vec3 l1=normalize(vec3(1.0,1.2,0.8));vec3 l2=normalize(vec3(-0.8,-0.5,1.0));
+    float d1=max(dot(norm,l1),0.0);float d2=max(dot(norm,l2),0.0)*0.35;
+    vec3 hw=normalize(l1+viewDir);float spec=pow(max(dot(norm,hw),0.0),48.0)*uReflection*2.0;
+    light=vec3(0.25+d1*0.65+d2)+vec3(spec);
+  } else { light=mix(vec3(0.4),uEnvColor,0.6)+vec3(max(dot(norm,viewDir),0.0)*uReflection); }
+  gl_FragColor=vec4(col*light*uBrightness,1.0);
+}`;
+
+const uniforms = {
+  uColor1:{value:new THREE.Color(S.color1)}, uColor2:{value:new THREE.Color(S.color2)}, uColor3:{value:new THREE.Color(S.color3)},
+  uBrightness:{value:S.brightness}, uReflection:{value:S.reflection},
+  uTime:{value:0}, uSpeed:{value:S.uSpeed}, uFrequency:{value:S.uFrequency},
+  uAmplitude:{value:S.uAmplitude}, uDensity:{value:S.uDensity}, uStrength:{value:S.uStrength},
+  uLightType:{value:0}, uEnvColor:{value:new THREE.Color(0.5,0.6,0.8)},
+};
+
+const material = new THREE.ShaderMaterial({vertexShader,fragmentShader,uniforms,wireframe:false});
+
+let mesh;
+function buildMesh(){
+  if(mesh){scene.remove(mesh);mesh.geometry.dispose();}
+  let geo;
+  if(S.type==='sphere') geo=new THREE.SphereGeometry(2,128,128);
+  else if(S.type==='plane') geo=new THREE.PlaneGeometry(5,5,128,128);
+  else geo=new THREE.PlaneGeometry(8,8,160,160);
+  mesh=new THREE.Mesh(geo,material);scene.add(mesh);
+}
+buildMesh();
+
+function updateCamera(){
+  const az=S.cAzimuthAngle*Math.PI/180,pol=S.cPolarAngle*Math.PI/180,d=S.cDistance;
+  camera.position.set(d*Math.sin(pol)*Math.sin(az),d*Math.cos(pol),d*Math.sin(pol)*Math.cos(az));
+  camera.fov=S.fov;camera.zoom=S.cameraZoom/10;camera.updateProjectionMatrix();camera.lookAt(0,0,0);
+}
+
+// ── RENDER LOOP ──
+let lastTime=0,frameCount=0,lastFPS=0;
+function animate(ts){
+  requestAnimationFrame(animate);
+  const dt=Math.min((ts-lastTime)/1000,0.1);lastTime=ts;
+  frameCount++;
+  if(ts-lastFPS>1000){document.getElementById('fps-counter').textContent=frameCount+' fps';frameCount=0;lastFPS=ts;}
+  if(S.animate){
+    uniforms.uTime.value+=dt;
+    document.getElementById('v-uTime').textContent=uniforms.uTime.value.toFixed(2);
+    document.getElementById('uTime').value=uniforms.uTime.value%100;
+  }
+  if(mesh){mesh.rotation.x=S.rotationX*Math.PI/180;mesh.rotation.y=S.rotationY*Math.PI/180;mesh.rotation.z=S.rotationZ*Math.PI/180;}
+  controls.update();renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);
+
+window.addEventListener('resize',()=>{
+  const w=container.clientWidth,h=container.clientHeight;
+  camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h);
+});
+
+// ── GRAIN ──
+const grainCanvas=document.getElementById('grain-canvas');
+const gCtx=grainCanvas.getContext('2d');
+function resizeGrain(){grainCanvas.width=window.innerWidth;grainCanvas.height=window.innerHeight;}
+resizeGrain();window.addEventListener('resize',resizeGrain);
+function animateGrain(){
+  if(S.grain){
+    const id=gCtx.createImageData(grainCanvas.width,grainCanvas.height);const d=id.data;
+    for(let i=0;i<d.length;i+=4){const v=Math.random()*255|0;d[i]=d[i+1]=d[i+2]=v;d[i+3]=40;}
+    gCtx.putImageData(id,0,0);grainCanvas.style.opacity='1';
+  } else grainCanvas.style.opacity='0';
+  setTimeout(animateGrain,50);
+}
+animateGrain();
+
+const envColors={city:new THREE.Color(0.55,0.6,0.75),dawn:new THREE.Color(0.85,0.55,0.35),night:new THREE.Color(0.15,0.2,0.45)};
+
+// ── GLASS OVERLAY ──
+function hexToRGB(hex){return{r:parseInt(hex.slice(1,3),16),g:parseInt(hex.slice(3,5),16),b:parseInt(hex.slice(5,7),16)};}
+
+function applyGlass(){
+  const overlay=document.getElementById('glass-overlay');
+  const preview=document.getElementById('glass-preview-layer');
+  const {r,g,b}=hexToRGB(S.gTint);
+  const bf=`blur(${S.gBlur}px) saturate(${S.gSat})`;
+  const bg=`rgba(${r},${g},${b},${S.gOpacity/100})`;
+  const bd=`1px solid rgba(${r},${g},${b},${S.gBorder/100})`;
+  if(!S.glassOn){overlay.style.display='none';}
+  else{
+    overlay.style.cssText=`position:fixed;top:0;left:0;right:300px;bottom:0;z-index:3;pointer-events:none;display:block;backdrop-filter:${bf};-webkit-backdrop-filter:${bf};background:${bg};border-right:${bd};`;
+  }
+  preview.style.backdropFilter=`blur(${Math.min(S.gBlur,24)}px) saturate(${S.gSat})`;
+  preview.style.webkitBackdropFilter=`blur(${Math.min(S.gBlur,24)}px) saturate(${S.gSat})`;
+  preview.style.background=bg;
+}
+
+const glassPresets={
+  'frosted-light':{gBlur:20,gSat:1.4,gTint:'#ffffff',gOpacity:12,gBorder:18},
+  'frosted-dark':{gBlur:18,gSat:1.2,gTint:'#000000',gOpacity:35,gBorder:10},
+  'heavy':{gBlur:50,gSat:1.6,gTint:'#ffffff',gOpacity:25,gBorder:20},
+  'subtle':{gBlur:6,gSat:1.1,gTint:'#ffffff',gOpacity:5,gBorder:8},
+  'tinted':{gBlur:22,gSat:1.5,gTint:'#aaddff',gOpacity:15,gBorder:20},
+};
+
+function applyGlassPreset(name){
+  const p=glassPresets[name];Object.assign(S,p);
+  document.getElementById('gBlur').value=p.gBlur;document.getElementById('v-gBlur').textContent=p.gBlur+'px';
+  document.getElementById('gSat').value=p.gSat;document.getElementById('v-gSat').textContent=p.gSat.toFixed(2);
+  document.getElementById('gOpacity').value=p.gOpacity;document.getElementById('v-gOpacity').textContent=p.gOpacity+'%';
+  document.getElementById('gBorder').value=p.gBorder;document.getElementById('v-gBorder').textContent=p.gBorder+'%';
+  document.getElementById('color-glass').value=p.gTint;document.getElementById('cs-glass').style.background=p.gTint;
+  applyGlass();
+}
+
+// ── EXPORT HELPERS ──
+function getExportDims(res){
+  return{480:[854,480],720:[1280,720],1080:[1920,1080],'2k':[2560,1440],'4k':[3840,2160]}[res]||[1280,720];
+}
+
+function updateGifSizeEst(){
+  const[w,h]=getExportDims(S.gifRes);const fps=parseInt(S.gifFps)||10;
+  const frames=Math.round(fps*S.loopDuration);
+  const mb=Math.round(w*h*3*frames/1024/1024/8);
+  const warn=mb>150?'size-warn':'';
+  document.getElementById('gif-size-est').innerHTML=`<span class="${warn}">Est. ~${mb} MB · ${frames} frames · ${w}×${h}${mb>150?' (large!)':''}</span>`;
+}
+
+function updateVidSizeEst(){
+  const[w,h]=getExportDims(S.vidRes);const fps=parseInt(S.vidFps)||30;
+  const mb=Math.round(w*h*0.15*fps*S.loopDuration/8/1024/1024);
+  document.getElementById('vid-size-est').textContent=`Est. ~${mb} MB · WebM/VP9 · ${w}×${h}`;
+}
+
+function makeExportCamera(w,h){
+  const c=new THREE.PerspectiveCamera(S.fov,w/h,0.1,1000);
+  c.position.copy(camera.position);c.quaternion.copy(camera.quaternion);
+  c.zoom=camera.zoom;c.updateProjectionMatrix();return c;
+}
+
+// ── GIF EXPORT — omggif + median-cut quantiser ──────────────────────────
+let gifExporting=false;
+async function exportGIF(){
+  if(gifExporting)return; gifExporting=true;
+  const btn=document.getElementById('btn-gif');
+  btn.disabled=true; btn.textContent='Loading…';
+  const setStatus=s=>document.getElementById('gif-status').textContent=s;
+  const setProg=(v,label)=>{
+    document.getElementById('gif-progress').style.display='block';
+    document.getElementById('gif-bar').style.width=(v*100)+'%';
+    if(label)document.getElementById('gif-progress-label').textContent=label;
+  };
+  try{
+    // Load omggif (GIF byte-stream builder, no workers)
+    if(!window.GifWriter){
+      await new Promise((res,rej)=>{
+        const s=document.createElement('script');
+        s.src='https://cdn.jsdelivr.net/npm/omggif@1.0.10/omggif.js';
+        s.onload=res; s.onerror=rej; document.head.appendChild(s);
+      });
+    }
+
+    const[w,h]=getExportDims(S.gifRes);
+    const fps=parseInt(S.gifFps)||10;
+    const totalFrames=Math.round(fps*S.loopDuration);
+    const delayCs=Math.round(100/fps); // centiseconds
+
+    // Offscreen renderer
+    const expR=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+    expR.setPixelRatio(1); expR.setSize(w,h);
+    expR.setClearColor(new THREE.Color(S.bgColor));
+    expR.toneMapping=THREE.ACESFilmicToneMapping; expR.toneMappingExposure=1.0;
+    expR.domElement.style.cssText='position:fixed;left:-9999px;top:-9999px;pointer-events:none;';
+    document.body.appendChild(expR.domElement);
+    const expCam=makeExportCamera(w,h);
+
+    // Read canvas via 2D context (avoids cross-origin taint on WebGL)
+    const rc=document.createElement('canvas'); rc.width=w; rc.height=h;
+    const rctx=rc.getContext('2d');
+
+    const savedTime=uniforms.uTime.value, savedAnim=S.animate;
+    S.animate=false;
+
+    // Render all frames
+    const frames=[];
+    for(let i=0;i<totalFrames;i++){
+      uniforms.uTime.value=(i/totalFrames)*S.loopDuration;
+      expR.render(scene,expCam);
+      rctx.drawImage(expR.domElement,0,0);
+      const id=rctx.getImageData(0,0,w,h);
+      frames.push(id.data); // Uint8ClampedArray RGBA
+      setProg(i/(totalFrames+totalFrames*0.5), `Frame ${i+1}/${totalFrames}`);
+      if(i%3===0) await new Promise(r=>setTimeout(r,0));
+    }
+
+    uniforms.uTime.value=savedTime; S.animate=savedAnim;
+    document.body.removeChild(expR.domElement); expR.dispose();
+
+    setStatus('Quantising…'); btn.textContent='Quantising…';
+    await new Promise(r=>setTimeout(r,0));
+
+    // Build a shared 256-colour palette from first + middle + last frame samples
+    function buildPalette(rgbaFrames){
+      // Simple popularity / frequency palette: bucket RGB into 5-bit grid
+      const counts=new Map();
+      const step=Math.max(1,Math.floor(rgbaFrames.length/4));
+      for(let fi=0;fi<rgbaFrames.length;fi+=step){
+        const d=rgbaFrames[fi];
+        for(let i=0;i<d.length;i+=4){
+          const key=((d[i]>>3)<<10)|((d[i+1]>>3)<<5)|(d[i+2]>>3);
+          counts.set(key,(counts.get(key)||0)+1);
+        }
+      }
+      // Sort by frequency, take top 255, add one black
+      const sorted=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,255);
+      const palette=[[0,0,0]]; // index 0 = black fallback
+      for(const[key]of sorted){
+        palette.push([((key>>10)&31)<<3,((key>>5)&31)<<3,(key&31)<<3]);
+      }
+      while(palette.length<256) palette.push([0,0,0]);
+      return palette;
+    }
+
+    function nearestIdx(palette,r,g,b){
+      let best=0, bd=1e9;
+      for(let i=0;i<palette.length;i++){
+        const p=palette[i];
+        const d=(r-p[0])**2+(g-p[1])**2+(b-p[2])**2;
+        if(d<bd){bd=d;best=i;}
+      }
+      return best;
+    }
+
+    const palette=buildPalette(frames);
+    // Flat palette array for omggif (R,G,B,R,G,B,...)
+    const palFlat=new Uint8Array(256*3);
+    for(let i=0;i<256;i++){palFlat[i*3]=palette[i][0];palFlat[i*3+1]=palette[i][1];palFlat[i*3+2]=palette[i][2];}
+
+    // Build palette lookup cache
+    const cache=new Map();
+    function cachedNearest(r,g,b){
+      const k=((r>>2)<<12)|((g>>2)<<6)|(b>>2);
+      if(cache.has(k))return cache.get(k);
+      const v=nearestIdx(palette,r,g,b); cache.set(k,v); return v;
+    }
+
+    // Encode GIF with omggif
+    const bufSize=w*h*totalFrames*2+1024*1024;
+    const buf=new Uint8Array(bufSize);
+    const gw=new GifWriter(buf,w,h,{loop:0,palette:palFlat});
+
+    for(let fi=0;fi<frames.length;fi++){
+      const d=frames[fi];
+      const indexed=new Uint8Array(w*h);
+      for(let i=0,j=0;i<d.length;i+=4,j++) indexed[j]=cachedNearest(d[i],d[i+1],d[i+2]);
+      gw.addFrame(0,0,w,h,indexed,{delay:delayCs,palette:palFlat});
+      setProg(0.5+fi/(frames.length*2), `Encoding ${fi+1}/${frames.length}`);
+      if(fi%3===0) await new Promise(r=>setTimeout(r,0));
+    }
+
+    const bytes=buf.slice(0,gw.end());
+    const blob=new Blob([bytes],{type:'image/gif'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download='shadergradient-loop.gif';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+
+    setStatus(`Done! ${(blob.size/1024/1024).toFixed(1)} MB`);
+    setProg(1,'Complete ✓');
+    btn.textContent='↓ Export GIF Loop'; btn.disabled=false; gifExporting=false;
+
+  }catch(err){
+    document.getElementById('gif-status').textContent='Error: '+err.message;
+    document.getElementById('btn-gif').textContent='↓ Export GIF Loop';
+    document.getElementById('btn-gif').disabled=false; gifExporting=false;
+    console.error(err);
+  }
+}
+
+// ── VIDEO EXPORT ────────────────────────────────────────────────────────────
+let vidExporting=false;
+async function exportVideo(){
+  if(vidExporting)return; vidExporting=true;
+  const fmt=S.vidFmt||'webm';
+  const btn=document.getElementById('btn-vid');
+  btn.disabled=true; btn.textContent='Starting…';
+  const setStatus=s=>document.getElementById('vid-status').textContent=s;
+  const setProg=(v,label)=>{
+    document.getElementById('vid-progress').style.display='block';
+    document.getElementById('vid-bar').style.width=(v*100)+'%';
+    if(label)document.getElementById('vid-progress-label').textContent=label;
+  };
+  try{
+    const[w,h]=getExportDims(S.vidRes);
+    const fps=parseInt(S.vidFps)||30;
+    const totalFrames=Math.round(fps*S.loopDuration);
+    const savedTime=uniforms.uTime.value, savedAnim=S.animate;
+
+    if(fmt==='mp4'){
+      // WebCodecs MP4 path (Chrome 94+)
+      if(typeof VideoEncoder==='undefined') throw new Error('MP4 needs Chrome 94+ (VideoEncoder API)');
+
+      setStatus('Loading muxer…');
+      // Load mp4-muxer via dynamic import
+      const mod=await import('https://cdn.jsdelivr.net/npm/mp4-muxer@5/+esm');
+      const{Muxer,ArrayBufferTarget}=mod;
+
+      const target=new ArrayBufferTarget();
+      const muxer=new Muxer({target,video:{codec:'avc',width:w,height:h},fastStart:'in-memory'});
+
+      const expR=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+      expR.setPixelRatio(1); expR.setSize(w,h);
+      expR.setClearColor(new THREE.Color(S.bgColor));
+      expR.toneMapping=THREE.ACESFilmicToneMapping; expR.toneMappingExposure=1.0;
+      expR.domElement.style.cssText='position:fixed;left:-9999px;top:-9999px;pointer-events:none;';
+      document.body.appendChild(expR.domElement);
+      const expCam=makeExportCamera(w,h);
+
+      S.animate=false; uniforms.uTime.value=0;
+
+      const enc=new VideoEncoder({
+        output:(chunk,meta)=>muxer.addVideoChunk(chunk,meta),
+        error:e=>{throw e;}
+      });
+      enc.configure({codec:'avc1.42001f',width:w,height:h,bitrate:20_000_000,framerate:fps});
+
+      btn.textContent='Encoding…';
+      for(let i=0;i<totalFrames;i++){
+        uniforms.uTime.value=(i/totalFrames)*S.loopDuration;
+        expR.render(scene,expCam);
+        const frame=new VideoFrame(expR.domElement,{
+          timestamp:Math.round(i*1e6/fps), duration:Math.round(1e6/fps)
+        });
+        enc.encode(frame,{keyFrame:i%fps===0});
+        frame.close();
+        setProg(i/totalFrames,`Frame ${i+1}/${totalFrames}`);
+        if(i%5===0) await new Promise(r=>setTimeout(r,0));
+      }
+      await enc.flush(); muxer.finalize();
+      document.body.removeChild(expR.domElement); expR.dispose();
+      uniforms.uTime.value=savedTime; S.animate=savedAnim;
+
+      const blob=new Blob([target.buffer],{type:'video/mp4'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='shadergradient-loop.mp4';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url),5000);
+      setStatus(`Done! ${(blob.size/1024/1024).toFixed(1)} MB`);
+      setProg(1,'Complete ✓');
+      btn.textContent='↓ Export Video Loop'; btn.disabled=false; vidExporting=false;
+
+    } else {
+      // WebM via MediaRecorder
+      // Canvas must be visible (not off-screen) for captureStream to work
+      const expR=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+      expR.setPixelRatio(1); expR.setSize(w,h);
+      expR.setClearColor(new THREE.Color(S.bgColor));
+      expR.toneMapping=THREE.ACESFilmicToneMapping; expR.toneMappingExposure=1.0;
+      // 1×1 visible pixel — enough for captureStream, invisible to user
+      expR.domElement.style.cssText='position:fixed;right:304px;bottom:0;width:1px;height:1px;pointer-events:none;opacity:0.01;z-index:5;';
+      document.body.appendChild(expR.domElement);
+      const expCam=makeExportCamera(w,h);
+
+      // Render one frame first so the stream has content before recording starts
+      S.animate=false; uniforms.uTime.value=0;
+      expR.render(scene,expCam);
+      await new Promise(r=>setTimeout(r,150));
+
+      const mimeTypes=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
+      const mimeType=mimeTypes.find(m=>MediaRecorder.isTypeSupported(m))||'video/webm';
+      const stream=expR.domElement.captureStream(fps);
+      const recorder=new MediaRecorder(stream,{mimeType,videoBitsPerSecond:40_000_000});
+      const chunks=[];
+
+      recorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) chunks.push(e.data); };
+      recorder.onstop=()=>{
+        const blob=new Blob(chunks,{type:mimeType});
+        document.body.removeChild(expR.domElement); expR.dispose();
+        uniforms.uTime.value=savedTime; S.animate=savedAnim;
+        if(blob.size<2000){
+          setStatus('Error: empty file — try lower res/fps');
+          btn.textContent='↓ Export Video Loop'; btn.disabled=false; vidExporting=false; return;
+        }
+        const url=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=url; a.download='shadergradient-loop.webm';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(()=>URL.revokeObjectURL(url),5000);
+        setStatus(`Done! ${(blob.size/1024/1024).toFixed(1)} MB`);
+        setProg(1,'Complete ✓');
+        btn.textContent='↓ Export Video Loop'; btn.disabled=false; vidExporting=false;
+      };
+
+      recorder.start(200); // flush chunks every 200ms
+      btn.textContent='Recording…'; setStatus('Recording…');
+
+      let frame=0;
+      function renderFrame(){
+        if(frame>=totalFrames){
+          setTimeout(()=>recorder.stop(), 350); return;
+        }
+        uniforms.uTime.value=(frame/totalFrames)*S.loopDuration;
+        expR.render(scene,expCam);
+        setProg(frame/totalFrames,`Frame ${frame+1}/${totalFrames}`);
+        frame++;
+        setTimeout(renderFrame,1000/fps);
+      }
+      renderFrame();
+    }
+  }catch(err){
+    document.getElementById('vid-status').textContent='Error: '+err.message;
+    document.getElementById('btn-vid').textContent='↓ Export Video Loop';
+    document.getElementById('btn-vid').disabled=false; vidExporting=false;
+    console.error(err);
+  }
+}
+// ── CODE OUTPUT ──
+function updateCode(){
+  document.getElementById('code-out').textContent=[
+    `<ShaderGradient`,
+    `  animate="${S.animate?'on':'off'}"`,
+    `  brightness={${S.brightness}}`,
+    `  cAzimuthAngle={${S.cAzimuthAngle}}`,
+    `  cDistance={${S.cDistance}}`,
+    `  cPolarAngle={${S.cPolarAngle}}`,
+    `  cameraZoom={${S.cameraZoom}}`,
+    `  color1="${S.color1}"`,
+    `  color2="${S.color2}"`,
+    `  color3="${S.color3}"`,
+    `  envPreset="${S.envPreset}"`,
+    `  fov={${S.fov}}`,
+    `  grain="${S.grain?'on':'off'}"`,
+    `  lightType="${S.lightType}"`,
+    `  pixelDensity={${S.pixelDensity}}`,
+    `  reflection={${S.reflection}}`,
+    `  rotationX={${S.rotationX}}`,
+    `  rotationY={${S.rotationY}}`,
+    `  rotationZ={${S.rotationZ}}`,
+    `  type="${S.type}"`,
+    `  uAmplitude={${S.uAmplitude}}`,
+    `  uDensity={${S.uDensity}}`,
+    `  uFrequency={${S.uFrequency}}`,
+    `  uSpeed={${S.uSpeed}}`,
+    `  uStrength={${S.uStrength}}`,
+    `  wireframe={${S.wireframe}}`,
+    `/>`,
+  ].join('\n');
+}
+updateCode();
+
+document.getElementById('code-out').addEventListener('click',function(){
+  navigator.clipboard.writeText(this.textContent).then(()=>{
+    this.classList.add('copied');setTimeout(()=>this.classList.remove('copied'),1800);
+  });
+});
+
+// ── UI WIRING ──
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(x=>x.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById('tab-'+this.dataset.tab).classList.add('active');
+    if(this.dataset.tab==='code')updateCode();
+    if(this.dataset.tab==='export'){updateGifSizeEst();updateVidSizeEst();}
+  });
+});
+
+// Gradient colors
+[1,2,3].forEach(i=>{
+  const inp=document.getElementById(`color${i}`);
+  const sw=document.getElementById(`cs${i}`);
+  inp.addEventListener('input',e=>{S[`color${i}`]=e.target.value;sw.style.background=e.target.value;uniforms[`uColor${i}`].value.set(e.target.value);});
+  document.getElementById(`cw${i}`).addEventListener('click',()=>inp.click());
+});
+
+// BG color
+document.getElementById('cw-bg').addEventListener('click',()=>document.getElementById('color-bg').click());
+document.getElementById('color-bg').addEventListener('input',e=>{
+  S.bgColor=e.target.value;
+  document.getElementById('cs-bg').style.background=e.target.value;
+  renderer.setClearColor(new THREE.Color(e.target.value));
+  document.querySelectorAll('.bg-preset').forEach(p=>p.classList.remove('active'));
+});
+document.querySelectorAll('.bg-preset').forEach(p=>{
+  p.addEventListener('click',function(){
+    document.querySelectorAll('.bg-preset').forEach(x=>x.classList.remove('active'));this.classList.add('active');
+    S.bgColor=this.dataset.color;
+    document.getElementById('color-bg').value=this.dataset.color;
+    document.getElementById('cs-bg').style.background=this.dataset.color;
+    renderer.setClearColor(new THREE.Color(this.dataset.color));
+  });
+});
+
+// Glass tint color
+document.getElementById('cw-glass').addEventListener('click',()=>document.getElementById('color-glass').click());
+document.getElementById('color-glass').addEventListener('input',e=>{S.gTint=e.target.value;document.getElementById('cs-glass').style.background=e.target.value;applyGlass();});
+
+// Glass presets
+document.querySelectorAll('#glass-presets .opt-btn').forEach(btn=>{
+  btn.addEventListener('click',function(){
+    document.querySelectorAll('#glass-presets .opt-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');
+    applyGlassPreset(this.dataset.preset);
+  });
+});
+
+// Slider helper
+function slider(id,key,fmt,cb){
+  document.getElementById(id).addEventListener('input',e=>{
+    const v=parseFloat(e.target.value);S[key]=v;
+    const d=document.getElementById('v-'+id);if(d)d.textContent=fmt?fmt(v):v;
+    if(cb)cb(v);
+  });
+}
+
+slider('brightness','brightness',v=>v.toFixed(2),v=>uniforms.uBrightness.value=v);
+slider('reflection','reflection',v=>v.toFixed(2),v=>uniforms.uReflection.value=v);
+slider('uAmplitude','uAmplitude',v=>v.toFixed(2),v=>uniforms.uAmplitude.value=v);
+slider('uDensity','uDensity',v=>v.toFixed(2),v=>uniforms.uDensity.value=v);
+slider('uFrequency','uFrequency',v=>v.toFixed(1),v=>uniforms.uFrequency.value=v);
+slider('uStrength','uStrength',v=>v.toFixed(2),v=>uniforms.uStrength.value=v);
+slider('uSpeed','uSpeed',v=>v.toFixed(2),v=>uniforms.uSpeed.value=v);
+slider('rotationX','rotationX',v=>v+'°');
+slider('rotationY','rotationY',v=>v+'°');
+slider('rotationZ','rotationZ',v=>v+'°');
+slider('cDistance','cDistance',v=>v.toFixed(1),()=>updateCamera());
+slider('cAzimuthAngle','cAzimuthAngle',v=>v+'°',()=>updateCamera());
+slider('cPolarAngle','cPolarAngle',v=>v+'°',()=>updateCamera());
+slider('cameraZoom','cameraZoom',v=>v.toFixed(1),()=>updateCamera());
+slider('fov','fov',v=>v+'°',()=>updateCamera());
+slider('loopDuration','loopDuration',v=>v+'s',()=>{updateGifSizeEst();updateVidSizeEst();});
+slider('pixelDensity','pixelDensity',v=>v+'x',v=>renderer.setPixelRatio(v));
+slider('gBlur','gBlur',v=>v+'px',()=>applyGlass());
+slider('gSat','gSat',v=>v.toFixed(2),()=>applyGlass());
+slider('gOpacity','gOpacity',v=>v+'%',()=>applyGlass());
+slider('gBorder','gBorder',v=>v+'%',()=>applyGlass());
+
+document.getElementById('uTime').addEventListener('input',e=>{
+  uniforms.uTime.value=parseFloat(e.target.value);
+  document.getElementById('v-uTime').textContent=parseFloat(e.target.value).toFixed(2);
+});
+
+function optGroup(id,key,cb){
+  document.querySelectorAll(`#${id} .opt-btn`).forEach(btn=>{
+    btn.addEventListener('click',function(){
+      document.querySelectorAll(`#${id} .opt-btn`).forEach(b=>b.classList.remove('active'));this.classList.add('active');
+      S[key]=this.dataset.val;if(cb)cb(this.dataset.val);
+    });
+  });
+}
+optGroup('type','type',()=>buildMesh());
+optGroup('lightType','lightType',v=>{uniforms.uLightType.value=v==='3d'?0:1;});
+optGroup('envPreset','envPreset',v=>{uniforms.uEnvColor.value.copy(envColors[v]);});
+optGroup('gif-res','gifRes',()=>updateGifSizeEst());
+optGroup('gif-fps','gifFps',v=>{S.gifFps=parseInt(v);updateGifSizeEst();});
+optGroup('vid-res','vidRes',()=>updateVidSizeEst());
+optGroup('vid-fps','vidFps',v=>{S.vidFps=parseInt(v);updateVidSizeEst();});
+optGroup('vid-fmt','vidFmt',v=>{
+  document.getElementById('mp4-note').style.display=v==='mp4'?'block':'none';
+  document.getElementById('btn-vid').textContent=v==='mp4'?'↓ Export MP4 Loop':'↓ Export Video Loop';
+});
+
+function toggle(id,key,cb){
+  document.getElementById('toggle-'+id).addEventListener('click',function(){
+    S[key]=!S[key];this.classList.toggle('on',S[key]);if(cb)cb(S[key]);
+  });
+}
+toggle('wireframe','wireframe',v=>material.wireframe=v);
+toggle('grain','grain');
+toggle('axes','axes',v=>axesHelper.visible=v);
+toggle('animate','animate');
+toggle('glass','glassOn',()=>applyGlass());
+document.getElementById('toggle-animate').classList.add('on');
+
+document.getElementById('btn-gif').addEventListener('click',exportGIF);
+document.getElementById('btn-vid').addEventListener('click',exportVideo);
+
+// ── CAMERA RESET ──
+const CAM_DEFAULTS = { cDistance:7.1, cAzimuthAngle:0, cPolarAngle:140, cameraZoom:17.3, fov:45 };
+function resetCamera() {
+  Object.assign(S, CAM_DEFAULTS);
+  document.getElementById('cDistance').value = S.cDistance; document.getElementById('v-cDistance').textContent = S.cDistance.toFixed(1);
+  document.getElementById('cAzimuthAngle').value = S.cAzimuthAngle; document.getElementById('v-cAzimuthAngle').textContent = S.cAzimuthAngle+'°';
+  document.getElementById('cPolarAngle').value = S.cPolarAngle; document.getElementById('v-cPolarAngle').textContent = S.cPolarAngle+'°';
+  document.getElementById('cameraZoom').value = S.cameraZoom; document.getElementById('v-cameraZoom').textContent = S.cameraZoom.toFixed(1);
+  document.getElementById('fov').value = S.fov; document.getElementById('v-fov').textContent = S.fov+'°';
+  controls.reset();
+  updateCamera();
+  const btn = document.getElementById('btn-cam-reset');
+  btn.textContent = '✓ Reset'; setTimeout(()=>btn.textContent='↺ Reset Camera to Default', 1200);
+}
+document.getElementById('btn-cam-reset').addEventListener('click', resetCamera);
+
+// ── APPLY FULL STATE (used by preset load) ──
+function applyFullState(st) {
+  Object.assign(S, st);
+  // Colors
+  [1,2,3].forEach(i => {
+    const c = S[`color${i}`];
+    document.getElementById(`color${i}`).value = c;
+    document.getElementById(`cs${i}`).style.background = c;
+    uniforms[`uColor${i}`].value.set(c);
+  });
+  // BG
+  document.getElementById('color-bg').value = S.bgColor;
+  document.getElementById('cs-bg').style.background = S.bgColor;
+  renderer.setClearColor(new THREE.Color(S.bgColor));
+  // Sliders
+  const sliderMap = [
+    ['brightness','v-brightness',v=>v.toFixed(2)], ['reflection','v-reflection',v=>v.toFixed(2)],
+    ['uAmplitude','v-uAmplitude',v=>v.toFixed(2)], ['uDensity','v-uDensity',v=>v.toFixed(2)],
+    ['uFrequency','v-uFrequency',v=>v.toFixed(1)], ['uStrength','v-uStrength',v=>v.toFixed(2)],
+    ['uSpeed','v-uSpeed',v=>v.toFixed(2)],
+    ['rotationX','v-rotationX',v=>v+'°'], ['rotationY','v-rotationY',v=>v+'°'], ['rotationZ','v-rotationZ',v=>v+'°'],
+    ['cDistance','v-cDistance',v=>v.toFixed(1)], ['cAzimuthAngle','v-cAzimuthAngle',v=>v+'°'],
+    ['cPolarAngle','v-cPolarAngle',v=>v+'°'], ['cameraZoom','v-cameraZoom',v=>v.toFixed(1)],
+    ['fov','v-fov',v=>v+'°'], ['loopDuration','v-loopDuration',v=>v+'s'],
+    ['pixelDensity','v-pixelDensity',v=>v+'x'],
+    ['gBlur','v-gBlur',v=>v+'px'], ['gSat','v-gSat',v=>v.toFixed(2)],
+    ['gOpacity','v-gOpacity',v=>v+'%'], ['gBorder','v-gBorder',v=>v+'%'],
+  ];
+  sliderMap.forEach(([id, vid, fmt]) => {
+    const el = document.getElementById(id); if (!el) return;
+    el.value = S[id]; document.getElementById(vid).textContent = fmt(S[id]);
+  });
+  // Uniforms
+  uniforms.uBrightness.value = S.brightness; uniforms.uReflection.value = S.reflection;
+  uniforms.uAmplitude.value = S.uAmplitude; uniforms.uDensity.value = S.uDensity;
+  uniforms.uFrequency.value = S.uFrequency; uniforms.uStrength.value = S.uStrength;
+  uniforms.uSpeed.value = S.uSpeed;
+  renderer.setPixelRatio(S.pixelDensity);
+  // Opt buttons
+  ['lightType','envPreset','type'].forEach(group => {
+    document.querySelectorAll(`#${group} .opt-btn`).forEach(b => b.classList.toggle('active', b.dataset.val === S[group]));
+  });
+  uniforms.uLightType.value = S.lightType === '3d' ? 0 : 1;
+  uniforms.uEnvColor.value.copy(envColors[S.envPreset] || envColors.city);
+  if (mesh && S.type !== (mesh.geometry.type === 'SphereGeometry' ? 'sphere' : S.type)) buildMesh();
+  else buildMesh();
+  // Toggles
+  ['wireframe','grain','axes','animate','glassOn'].forEach(key => {
+    const id = key === 'glassOn' ? 'toggle-glass' : `toggle-${key}`;
+    const el = document.getElementById(id); if (el) el.classList.toggle('on', S[key]);
+  });
+  material.wireframe = S.wireframe;
+  axesHelper.visible = S.axes;
+  // Glass tint
+  document.getElementById('color-glass').value = S.gTint;
+  document.getElementById('cs-glass').style.background = S.gTint;
+  updateCamera(); applyGlass();
+}
+
+// ── PRESET SYSTEM (localStorage) ──
+const STORAGE_KEY = 'shadergradient_presets_v1';
+const BUILTIN_PRESETS = [
+  {
+    name: 'Silk Smoke',
+    // Very slow, ultra-low amplitude plane — silky smooth, almost still. Good for minimal hero backgrounds.
+    state: { color1:'#e8e0d8', color2:'#b0a898', color3:'#6c6460', bgColor:'#f0ece6', brightness:1.0, reflection:0.04, lightType:'env', envPreset:'city', type:'plane', uAmplitude:0.25, uDensity:0.6, uFrequency:2.2, uStrength:0.5, rotationX:-12, rotationY:0, rotationZ:0, cDistance:9, cAzimuthAngle:0, cPolarAngle:85, cameraZoom:14, fov:50, uSpeed:0.03, loopDuration:20, pixelDensity:1, wireframe:false, grain:false, axes:false, animate:true, glassOn:false, gBlur:16, gSat:1.2, gTint:'#ffffff', gOpacity:12, gBorder:15 }
+  },
+  {
+    name: 'Deep Indigo Pulse',
+    // Sphere, dark background, slow medium-amplitude pulse — moody, almost breathing
+    state: { color1:'#4400cc', color2:'#1100aa', color3:'#000033', bgColor:'#050008', brightness:1.3, reflection:0.25, lightType:'3d', envPreset:'night', type:'sphere', uAmplitude:0.8, uDensity:1.8, uFrequency:3.0, uStrength:0.9, rotationX:0, rotationY:0, rotationZ:0, cDistance:6.5, cAzimuthAngle:0, cPolarAngle:135, cameraZoom:18, fov:42, uSpeed:0.05, loopDuration:14, pixelDensity:1, wireframe:false, grain:false, axes:false, animate:true, glassOn:false, gBlur:16, gSat:1.2, gTint:'#ffffff', gOpacity:12, gBorder:15 }
+  },
+  {
+    name: 'Golden Hour Ripple',
+    // waterPlane, warm palette, viewed from directly above — looks like liquid gold
+    state: { color1:'#ffcc44', color2:'#ff6600', color3:'#cc2200', bgColor:'#1a0800', brightness:1.15, reflection:0.35, lightType:'3d', envPreset:'dawn', type:'waterPlane', uAmplitude:0.4, uDensity:1.0, uFrequency:7.0, uStrength:0.7, rotationX:-90, rotationY:0, rotationZ:0, cDistance:10, cAzimuthAngle:0, cPolarAngle:10, cameraZoom:10, fov:55, uSpeed:0.07, loopDuration:12, pixelDensity:1, wireframe:false, grain:false, axes:false, animate:true, glassOn:false, gBlur:16, gSat:1.2, gTint:'#ffffff', gOpacity:12, gBorder:15 }
+  },
+  {
+    name: 'Arctic Glass',
+    // Pale sphere, high zoom/close crop, near-white palette, frost overlay on
+    state: { color1:'#ddeeff', color2:'#88bbee', color3:'#335577', bgColor:'#0a1520', brightness:1.05, reflection:0.4, lightType:'env', envPreset:'city', type:'sphere', uAmplitude:0.55, uDensity:0.9, uFrequency:4.5, uStrength:0.6, rotationX:0, rotationY:0, rotationZ:0, cDistance:4.5, cAzimuthAngle:0, cPolarAngle:110, cameraZoom:28, fov:35, uSpeed:0.04, loopDuration:16, pixelDensity:1, wireframe:false, grain:false, axes:false, animate:true, glassOn:true, gBlur:22, gSat:1.3, gTint:'#cce8ff', gOpacity:10, gBorder:18 }
+  },
+  {
+    name: 'Velvet Underground',
+    // Very dense, high-frequency, dark crimson — almost like crushed velvet texture
+    state: { color1:'#880033', color2:'#330011', color3:'#220022', bgColor:'#060002', brightness:0.85, reflection:0.08, lightType:'3d', envPreset:'night', type:'sphere', uAmplitude:0.35, uDensity:3.5, uFrequency:14.0, uStrength:0.8, rotationX:20, rotationY:0, rotationZ:0, cDistance:5.5, cAzimuthAngle:0, cPolarAngle:125, cameraZoom:22, fov:38, uSpeed:0.025, loopDuration:18, pixelDensity:1, wireframe:false, grain:true, axes:false, animate:true, glassOn:false, gBlur:16, gSat:1.2, gTint:'#ffffff', gOpacity:12, gBorder:15 }
+  },
+];
+
+function loadUserPresets() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch(e) { return []; }
+}
+
+function saveUserPresets(presets) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(presets)); } catch(e) {}
+}
+
+function getStateSnapshot() {
+  return JSON.parse(JSON.stringify({
+    color1:S.color1, color2:S.color2, color3:S.color3, bgColor:S.bgColor,
+    brightness:S.brightness, reflection:S.reflection, lightType:S.lightType, envPreset:S.envPreset,
+    type:S.type, uAmplitude:S.uAmplitude, uDensity:S.uDensity, uFrequency:S.uFrequency, uStrength:S.uStrength,
+    rotationX:S.rotationX, rotationY:S.rotationY, rotationZ:S.rotationZ,
+    cDistance:S.cDistance, cAzimuthAngle:S.cAzimuthAngle, cPolarAngle:S.cPolarAngle,
+    cameraZoom:S.cameraZoom, fov:S.fov, uSpeed:S.uSpeed, loopDuration:S.loopDuration,
+    pixelDensity:S.pixelDensity, wireframe:S.wireframe, grain:S.grain, axes:S.axes, animate:S.animate,
+    glassOn:S.glassOn, gBlur:S.gBlur, gSat:S.gSat, gTint:S.gTint, gOpacity:S.gOpacity, gBorder:S.gBorder,
+  }));
+}
+
+function renderPresetItem(p, isBuiltin, container, idx) {
+  const el = document.createElement('div');
+  el.className = 'preset-item';
+  const st = p.state;
+  el.innerHTML = `
+    <div class="preset-item-colors">
+      <div class="preset-item-dot" style="background:${st.color1||'#fff'}"></div>
+      <div class="preset-item-dot" style="background:${st.color2||'#fff'}"></div>
+      <div class="preset-item-dot" style="background:${st.color3||'#fff'}"></div>
+    </div>
+    <span class="preset-item-name">${p.name}</span>
+    ${p.date ? `<span class="preset-item-date">${p.date}</span>` : ''}
+    ${!isBuiltin ? `<button class="preset-item-del" title="Delete">×</button>` : ''}
+  `;
+  el.querySelector('.preset-item-name').addEventListener('click', () => {
+    applyFullState(JSON.parse(JSON.stringify(st)));
+    // Flash
+    el.style.borderColor = 'rgba(100,220,150,0.5)';
+    setTimeout(() => el.style.borderColor = '', 800);
+  });
+  if (!isBuiltin) {
+    el.querySelector('.preset-item-del').addEventListener('click', e => {
+      e.stopPropagation();
+      const presets = loadUserPresets();
+      presets.splice(idx, 1);
+      saveUserPresets(presets);
+      renderAllPresets();
+    });
+  }
+  container.appendChild(el);
+}
+
+function renderAllPresets() {
+  const builtinEl = document.getElementById('preset-builtin-list');
+  const userEl = document.getElementById('preset-user-list');
+  builtinEl.innerHTML = ''; userEl.innerHTML = '';
+
+  BUILTIN_PRESETS.forEach((p, i) => renderPresetItem(p, true, builtinEl, i));
+
+  const userPresets = loadUserPresets();
+  if (userPresets.length === 0) {
+    userEl.innerHTML = '<div class="preset-empty">No saved presets yet.<br>Dial in a look and hit Save.</div>';
+  } else {
+    userPresets.forEach((p, i) => renderPresetItem(p, false, userEl, i));
+  }
+}
+
+document.getElementById('btn-save-preset').addEventListener('click', () => {
+  const nameEl = document.getElementById('preset-name-input');
+  const name = nameEl.value.trim();
+  if (!name) { nameEl.focus(); nameEl.style.borderColor = 'rgba(255,100,100,0.5)'; setTimeout(()=>nameEl.style.borderColor='',1000); return; }
+  const presets = loadUserPresets();
+  presets.unshift({ name, date: new Date().toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'}), state: getStateSnapshot() });
+  saveUserPresets(presets);
+  nameEl.value = '';
+  renderAllPresets();
+  const btn = document.getElementById('btn-save-preset');
+  btn.textContent = '✓ Saved'; setTimeout(() => btn.textContent = 'Save', 1200);
+});
+
+document.getElementById('preset-name-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('btn-save-preset').click();
+});
+
+// Init presets
+renderAllPresets();
+
+// Init estimates
+updateGifSizeEst();updateVidSizeEst();
+</script>
+</body>
+</html>
