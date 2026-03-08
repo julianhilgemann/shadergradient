@@ -7,7 +7,11 @@
 ![Export](https://img.shields.io/badge/Export-GIF_%7C_WebM_%7C_MP4-6366F1?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-gray?style=flat-square)
 
+**[🚀 Live Demo](https://julianhilgemann.github.io/shadergradient)**
+
 A browser-based, real-time shader gradient simulator built on Three.js and custom GLSL. Dial in animated mesh gradient visuals — spheres, planes, water planes — and export them as looping GIFs or videos. No install, no build step: open the HTML file and go.
+
+![ShaderGradient Playground screenshot](main_screenshot.png)
 
 ---
 
