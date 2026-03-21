@@ -302,23 +302,11 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.35); }
     -webkit-backdrop-filter: blur(32px) saturate(160%);
   }
 
-  /* Drag pill handle */
-  #panel::before {
-    content: '';
-    display: block;
-    width: 36px;
-    height: 4px;
-    background: rgba(255,255,255,0.18);
-    border-radius: 2px;
-    margin: 10px auto 0;
-    flex-shrink: 0;
-  }
-
   /* Tighten tab bar */
   .tabs {
-    padding: 8px 12px 0;
-    padding-bottom: 8px;
-    gap: 3px;
+    margin: 12px 14px 0;
+    padding: 0 0 10px;
+    gap: 4px;
   }
 
   /* Tighter body padding */
@@ -1406,6 +1394,10 @@ function applyFullState(st) {
 // ── PRESET SYSTEM (localStorage) ──
 const STORAGE_KEY = 'shadergradient_presets_v1';
 const BUILTIN_PRESETS = [
+  {
+    name: 'Default',
+    state: { color1:'#ff5fc5', color2:'#bee3ff', color3:'#496bff', bgColor:'#000000', brightness:1.1, reflection:0.1, lightType:'3d', envPreset:'city', type:'plane', uAmplitude:0.2, uDensity:0.5, uFrequency:1.4, uStrength:1.8, rotationX:0, rotationY:0, rotationZ:0, cDistance:7.1, cAzimuthAngle:0, cPolarAngle:140, cameraZoom:17.3, fov:45, uSpeed:0.32, loopDuration:10, pixelDensity:1, wireframe:true, grain:false, axes:false, animate:true, glassOn:false, gBlur:16, gSat:1.2, gTint:'#ffffff', gOpacity:12, gBorder:15 }
+  },
   {
     name: 'Silk Smoke',
     state: { color1:'#e8e0d8', color2:'#b0a898', color3:'#6c6460', bgColor:'#f0ece6', brightness:1.0, reflection:0.04, lightType:'env', envPreset:'city', type:'plane', uAmplitude:0.25, uDensity:0.6, uFrequency:2.2, uStrength:0.5, rotationX:-12, rotationY:0, rotationZ:0, cDistance:9, cAzimuthAngle:0, cPolarAngle:85, cameraZoom:14, fov:50, uSpeed:0.03, loopDuration:20, pixelDensity:1, wireframe:false, grain:false, axes:false, animate:true, glassOn:false, gBlur:16, gSat:1.2, gTint:'#ffffff', gOpacity:12, gBorder:15 }
